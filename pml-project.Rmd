@@ -1,0 +1,131 @@
+---
+title: "Weight Lifting Exercise Modelling to Predict Activity"
+output: html_document
+---
+
+## Question
+The project attempted to study how well people perform barbell lifting by predicting the manner in which they did the exercise. The outcome of the prediction is the class of activity, in the form of "A" to "E" (sitting-down, standing-up, standing, walking, and sitting).
+
+
+## Data
+The data used for this project is available from http://groupware.les.inf.puc-rio.br/har and further processing was performed to tailor the data for the project purpose. 
+
+```{r echo=FALSE, message=FALSE}
+# Refer all the necessary libraries
+library(AppliedPredictiveModeling)
+library(lattice)
+library(ggplot2)
+library(caret)
+library(e1071)
+library(randomForest)
+
+# Load Weight Lifting Exercise dataset
+rawData = read.csv("pml-training.csv")
+trainingData <- rawData
+```
+
+
+## Features
+```{r echo=FALSE}
+trainingData <- trainingData[,6:160]
+originalCol <- ncol(rawData)
+firstStepCol <- ncol(trainingData)
+```
+The first step of selecting the features prior to modelling is removing the irrelevant columns from the dataset, such as `r as.character(colnames(rawData[1:5]))` as these columns were created for the activity identification and would not assist in understanding the model. The original number of columns is `r as.character(originalCol)` and we took away `r as.character(originalCol - firstStepCol)` columns.
+
+```{r echo=FALSE}
+# Remove the columns with all NA values more than 20% of total rows
+totalRow <- nrow(trainingData)
+colNames <- numeric(0)
+
+for(x in 1:ncol(trainingData))
+{
+    totalNoValueRow <- sum(is.na(trainingData[,x]))
+        
+    if(totalNoValueRow > (totalRow * 0.2))
+    {
+        colNames <- c(colNames, colnames(trainingData[x]))
+    }
+    
+    x <- x + 1 
+}
+
+trainingData <- trainingData[,!colnames(trainingData) %in% colNames]
+
+secondStepCol <- ncol(trainingData)
+```
+The second step to clean up the data is by removing the NA values on the columns which have more than 20% from the total number of activity rows (`r as.character(nrow(rawData))`). Hence, we reduced the original number of columns from `r as.character(firstStepCol)` to `r as.character(secondStepCol)`.
+
+```{r echo=FALSE}
+# Remove columns with empty values
+totalRow <- nrow(trainingData)
+colNames2 <- numeric(0)
+
+for(x in 1:ncol(trainingData))
+{
+    totalNoValueRow <- nrow(trainingData[trainingData[x] == "", ])
+    
+    if(totalNoValueRow > (totalRow * 0.2))
+    {
+        colNames2 <- c(colNames2, colnames(trainingData[x]))
+    }
+    
+    x <- x + 1 
+}
+
+trainingData <- trainingData[,!colnames(trainingData) %in% colNames2]
+
+thirdStepCol <- ncol(trainingData)
+```
+The last features selection process is similar to step 2, with the process' aim to remove the empty values, again with the benchmark of more than 20% from the total activity rows. The final columns available now are `r as.character(thirdStepCol)` columns.
+
+```{r echo=FALSE}
+# Create data partition between training and testing
+inTrain <- createDataPartition(y = trainingData$classe, p = 0.6, list = FALSE)
+training <- trainingData[inTrain,]
+testing <- trainingData[-inTrain,]
+```
+The writer created data partition for training and testing activity, of which 60% of the data was being allocated to training.
+
+```{r echo=FALSE}
+# Convert the Factor column to numeric 
+#trainingData$new_window <- as.numeric(trainingData$new_window)
+```
+
+## Algorithms
+### Model selection
+The writer chose Random Forest to model the data which selects random features with strong predictors in many trees; this process creates a correlation among the features. More on the Random Forest model can be found at http://en.wikipedia.org/wiki/Random_forest site.
+```{r echo=FALSE}
+# Train the data with Random Forest model
+set.seed(32323)
+modelFit10 <- randomForest(training$classe ~ ., data = training, ntree = 10)
+modelFit25 <- randomForest(training$classe ~ ., data = training, ntree = 25)
+```
+
+The writer built the training data with RF model, starting from 10 trees and stopped at 25 to see if there was a significant level of error reduction. The seed is being used prior to modelling to ensure that the result is reproducible.
+```{r echo=FALSE}
+modelFit10
+modelFit25
+```
+
+The model with 25 trees was used to predict the testing data.
+```{r echo=FALSE}
+# Predict the test data using the fit model
+prediction <- predict(modelFit25, newdata = testing)
+```
+
+### Evaluation
+The following is the confusion matrix of the training data while the second result is from testing data. The accuracy of the testing data is slightly better than the training data, but both models churned high sensitivity and specificity. 
+```{r echo=FALSE}
+confusionMatrix(modelFit25$predicted, training$classe)
+confusionMatrix(prediction, testing$classe)
+```
+
+To review the importance of the variables on the model, the variables are listed below with their measurement.
+```{r echo=FALSE}
+varImp(modelFit25)
+```
+
+## Reference
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
